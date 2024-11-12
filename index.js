@@ -3,7 +3,7 @@
 const config = require("./config");
 
 // Importando Funções de Ajuda
-const { setupGoogleSheetTemplate, appendToGoogleSheet } = require("./utils/GoogleSheetsUtils")
+const { setupGoogleSheetTemplate, appendToGoogleSheet, clearGoogleSheet, backupGoogleSheetToExcel } = require("./utils/GoogleSheetsUtils")
 
 // Importando Biblioteca do Google, para o Google Sheet
 const { google } = require('googleapis');
@@ -20,9 +20,9 @@ const client = new Client({
 });
 
 // Ativação do Bot
-client.on('ready', () => {
+client.on('ready', async () => {
     // Inicializando o Whatsapp Bot
-    console.log('Client is Ready!');
+    console.log('[Server] Client is Ready!');
     
     // Inicializando Google Sheets Handler
     const credentials = config.credentials
@@ -32,11 +32,19 @@ client.on('ready', () => {
         credentials.private_key,
         ['https://www.googleapis.com/auth/spreadsheets']
     );
-    console.log('Google Sheets Ready!');
+    console.log('[Server] Google Sheets Ready!');
+
+    // Fazendo Backup da planilha antes de iniciar o código
+    await backupGoogleSheetToExcel(sheets, auth, config.spreadsheetId, config.sheetName)
+        .then(() => console.log("[Workbook] Backup created successfully."))
+        .catch(error => console.error(`[Workbook Error] Error creating backup: ${error}`));
+
+    // Limpando Planilha Antiga
+    await clearGoogleSheet(sheets, auth, config.spreadsheetId, config.sheetName)  
     
     // Criando Header do Google Sheets
     const questions = config.perguntas.slice(1, config.perguntas.length -1)
-    setupGoogleSheetTemplate(sheets, auth, config.spreadsheetId, config.sheetName, questions)
+    await setupGoogleSheetTemplate(sheets, auth, config.spreadsheetId, config.sheetName, questions)
 });
 
 // Retornando QR code para Autenticação do Whatsapp
@@ -55,9 +63,8 @@ let availableUsers = [
 
     // "12988478709", // Rod
     // "11969113993", // Nadal
-    // "11996561627", // Vivs
+    "11996561627", // Vivs
     // "11989341100",  // Mila
-    "8281610909"
 ];
 
 let userSessions = {};   // Definindo as Seções dos Usuários
@@ -67,9 +74,6 @@ let answerSessions = {}; // Definindo as Respostas dos Usuários
 client.on('message', async (msg) => { // message, outras pessoas | message_create, eu mesmo
     const userId = msg.from;
     // const userId = msg.author;
-
-    // console.log(`User ID: ${userId}`)
-    // console.log(`Author: ${msg.author}`)
     
     if (availableUsers.some(user => userId.includes(user))) {
         const incomingMsg = msg.body;

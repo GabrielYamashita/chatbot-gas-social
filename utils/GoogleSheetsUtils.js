@@ -1,7 +1,60 @@
 
+const fs = require('fs');
+const path = require('path');
+const xlsx = require('xlsx');
 const { google } = require('googleapis');
 
 // functions.js
+async function backupGoogleSheetToExcel(sheets, auth, spreadsheetId, sheetName) {
+    await auth.authorize();
+
+    // Puxando dados da Planilha do Google Sheet
+    const res = await sheets.spreadsheets.values.get({
+        auth,
+        spreadsheetId,
+        range: sheetName,
+    });
+    const rows = res.data.values;
+
+    if (!rows || rows.length <= 1) {
+        console.log("[Workbook] No data found in the sheet beyond headers. Skipping backup.");
+        return;
+    }
+
+    // Criando Novo Arquivo de Excel
+    const workbook = xlsx.utils.book_new();
+    const worksheet = xlsx.utils.aoa_to_sheet(rows);
+    xlsx.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+    // Salvando Arquivo com Data e Horário Atual
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.-]/g, '_').slice(0, 19);  // Format: YYYY_MM_DDTHH_MM_SS
+
+    const fileName = `${sheetName}_backup_${timestamp}.xlsx`;
+    const filePath = path.join(__dirname, '..', 'src', 'backup', fileName);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+
+    // Escrevendo Excel
+    xlsx.writeFile(workbook, filePath);
+    console.log(`[Workbook] Backup saved successfully at ${filePath}`);
+}
+
+
+
+async function clearGoogleSheet(sheets, auth, spreadsheetId, sheetName) {
+    await auth.authorize();
+
+    await sheets.spreadsheets.values.clear({
+        auth,
+        spreadsheetId,
+        range: sheetName,  // Specify only the sheet name to clear the entire sheet
+    });
+
+    console.log(`[Workbook] All data cleared from sheet: ${sheetName}`);
+}
+
+
+
 async function setupGoogleSheetTemplate(sheets, auth, spreadsheetId, sheetName, questions) {
     const headers = ["Cellphone", ...questions];
 
@@ -17,8 +70,10 @@ async function setupGoogleSheetTemplate(sheets, auth, spreadsheetId, sheetName, 
         },
     });
 
-    console.log("Template headers have benn created.");
+    console.log(`[Workbook] Template headers have been created in ${sheetName}.`);
 }
+
+
 
 async function appendToGoogleSheet(answers, sheets, auth, spreadsheetId, sheetName) {
     await auth.authorize();
@@ -52,12 +107,12 @@ async function appendToGoogleSheet(answers, sheets, auth, spreadsheetId, sheetNa
         },
     });
 
-    console.log("Data appended to Google Sheets successfully.");
+    console.log("[Workbook] Data appended to Google Sheets successfully.");
 }
 
 
-// Call setup function with your questions array to set up the template headers
 
+// Call setup function with your questions array to set up the template headers
 if (require.main == module) {
     const config = require('./config')
 
@@ -90,6 +145,6 @@ if (require.main == module) {
     appendToGoogleSheet(answers, sheets, auth, config.spreadsheetId, config.sheetName)
 
 } else {
-    module.exports = { setupGoogleSheetTemplate, appendToGoogleSheet };
+    module.exports = { setupGoogleSheetTemplate, appendToGoogleSheet, clearGoogleSheet, backupGoogleSheetToExcel };
 }
 
